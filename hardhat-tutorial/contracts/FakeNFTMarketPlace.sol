@@ -10,7 +10,7 @@ contract FakeNFTMarketPlace{
     // purchase() takes some ETH, and marks the msg.sender address
     //  as the owner of some NFT
     function purchase(uint256 _tokenId) external payable {
-        require(msg.value === nftPrice, "Insufficient funds");
+        require(msg.value == nftPrice, "Insufficient funds");
         require(tokens[_tokenId]==address(0),"Not for sale");
 
         tokens[_tokenId] = msg.sender;
