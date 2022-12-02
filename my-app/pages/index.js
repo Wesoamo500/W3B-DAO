@@ -5,6 +5,7 @@ import Web3modal from 'web3modal'
 import {L3PAD_DAO_CONTRACT,L3PAD_DAO_ABI,CRYPTO_DEV_NFT_ABI,CRYPTO_DEV_NFT_CONTRACT} from "../constants"
 
 import styles from '../styles/Home.module.css'
+import { formatEther } from 'ethers/lib/utils'
 
 
 export default function Home() {
@@ -16,6 +17,7 @@ export default function Home() {
   const [numProposals, setNumProposals] = useState("0")
   const [fakeNftTokenId, setFakeNftTokenId] = useState(" ");
   const [proposals, setProposals] = useState([]);
+  const [selectedTabs, setSelectedTabs] = useState("")
 
   // HELPER function to get the instance of the DAO contract
   const getDAOContractInstance = (providerOrSigner) =>{
@@ -124,6 +126,39 @@ export default function Home() {
     }
   }
 
+  // calls the function from the smart contract: function to vote on proposals takes the proposalId and the vote
+  const voteOnProposals = async(proposalId, _vote) =>{
+    try {
+      const signer = await getProviderOrSigner(true);
+      const daoContract = getDAOContractInstance(signer)
+
+      let vote = _vote === "YAY" ? 0 : 1;
+      const txn = await daoContract.voteOnProposal(proposalId,vote);
+      setLoading(true)
+      await txn.wait();
+      setLoading(false);
+      await fetchAllProposals();
+    } catch (error) {
+      console.log(error)
+      window.alert(error.message)
+    }
+  }
+
+  const executeProposal = async(proposalId) =>{
+    try {
+      const signer = await getProviderOrSigner(true);
+      const daoContract = getDAOContractInstance(signer);
+      const txn = await daoContract.executeProposal(proposalId);
+      setLoading(true);
+      await txn.wait();
+      setLoading(false);
+      await fetchAllProposals()
+    } catch (error) {
+      console.log(error)
+      window.alert(error.message)
+    }
+  }
+
   const getProviderOrSigner = async(needSigner=false) =>{
     const provider = await web3ModalRef.current.connect();
     const web3Provider = new providers.Web3Provider(provider);
@@ -165,6 +200,98 @@ export default function Home() {
       getNumProposalsInDAO()
     })
   },[walletConnected])
+
+
+  useEffect(()=>{
+    if(selectedTabs === "View Proposals"){
+      fetchAllProposals()
+    }
+  },[selectedTabs])
+
+  function renderTabs(){
+    if(selectedTabs === "Create Proposal"){
+      return renderCreateProposalTab()
+    }else if(selectedTabs === "View Proposals"){
+      return renderViewProposals()
+    }
+    return null;
+  }
+
+  function renderCreateProposalTab(){
+    if(loading){
+      return(
+        <div className={styles.description}>
+          Loading... Transaction in process
+        </div>
+      )
+    }else if(nftBalance === 0){
+      return(
+        <div className={styles.description}>
+          You do not own an NFT <br/>
+          <b>People who own an NFT can parttake in the voting process</b>
+        </div>
+      )
+    }else{
+      return(
+        <div className={styles.container}>
+          <label>Fake NFT token ID to purchase: </label>
+          <input placeholder='0' type='number' onChange={(e)=>setFakeNftTokenId(e.target.value)}/>
+          <button className={styles.button2} onClick={createProposal}>Create</button>
+        </div>
+      )
+    }
+  };
+
+  function renderViewProposals(){
+    if(loading){
+      return(
+        <div className={styles.description}>
+          Loading... Waiting for transactions...
+        </div>
+      )
+    }else if(proposals.length===0){
+      return(
+        <div className={styles.description}>
+          No Proposal has been created yet
+        </div>
+      )
+    }else{
+      return(
+        <div>
+          {proposals.map((p,index)=>(
+            <div className={styles.proposalCard} key={index}>
+              <p>Proposal ID: {p.proposalId}</p>
+              <p>Fake NFT to purchase: {p.nftTokenId}</p>
+              <p>Deadline: {p.deadline.toLocaleString()}</p>
+              <p>Yay Votes: {p.yayVotes}</p>
+              <p>Nay Votes: {p.NayVotes}</p>
+              <p>Executed?: {p.executed.toString()}</p>
+              {p.deadline.getTime() > Date.now() && !p.executed ? (
+                <div className={styles.flex}>
+                  <button className={styles.button2} onClick={()=>voteOnProposals(p.proposalId, "YAY")}>
+                    Vote YAY
+                  </button>
+                  <button className={styles.button2} onClick={()=>voteOnProposals(p.proposalId, "NAY")}>
+                    Vote NAY
+                  </button>
+                </div>
+              ):p.deadline.getTime() < Date.now() && !p.executed ? (
+                <div className={styles.flex}>
+                  <button className={styles.button2} onClick={()=>executeProposal(p.proposalId)}>
+                    Execute Proposal {" "}
+                    {p.yayVotes > p.nayVotes ? ("YAY") : ("NAY")}
+                  </button>
+                </div>
+              ) : (
+                <div className={styles.description}>Proposal Executed</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )
+    }
+  }
+
   return (
     <div>
       <Head>
@@ -172,6 +299,27 @@ export default function Home() {
         <meta name="description" content="DAO app" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
+      <div className={styles.main}>
+        <div>
+          <h1 className={styles.title}>Welcome to L3PAD</h1>
+          <div className={styles.description}>Welcome to DAO</div>
+          <div className={styles.description}>
+            Your L3pad NFT balance: {nftBalance}
+            <br/>
+            Treasury Balance: {formatEther(treasuryBalance)} ETH
+            <br/>
+            Total number of Proposals: {numProposals}
+          </div>
+          <div className={styles.flex}>
+            <button className={styles.button} onClick={()=>setSelectedTabs("Create Proposal")}>Create Proposal</button>
+            <button className={styles.button} onClick={()=>setSelectedTabs("View Proposals")}>View Proposals</button>
+          </div>
+          {renderTabs()}
+        </div>
+        <div>
+          <img className={styles.image} src='/DAO.png'/>
+        </div>
+      </div>
     </div>
   )
 }
